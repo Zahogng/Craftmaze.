@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CraftMaze - Custom Texture</title>
+  <style>
+    :root{
+      --bg:#0b0d10; --panel:#14171d; --panel2:#1b1f27; --text:#e5e7eb;
+      --muted:#9ca3af; --accent:#f59e0b; --ok:#10b981; --danger:#ef4444; --line:#2a2f39;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1200px;margin:0 auto;padding:16px}
+    h1{margin:0 0 12px;font-size:clamp(20px,3vw,32px)}
+    .grid{display:grid;gap:16px;grid-template-columns:320px 1fr}
+    @media (max-width: 980px){.grid{grid-template-columns:1fr}}
+    .card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 8px 22px rgba(0,0,0,.35)}
+    .card h2{margin:0 0 10px;font-size:14px;color:#fff;letter-spacing:.4px;text-transform:uppercase}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    button, select, input[type="file"]{width:100%;border:1px solid #374151;background:#0f1218;color:var(--text);border-radius:10px;padding:10px 12px;font-size:13px}
+    button{cursor:pointer;font-weight:700;transition:.15s ease}
+    button:hover{transform:translateY(-1px)}
+    .btn-accent{background:#3b82f6;border-color:#2563eb}
+    .btn-ok{background:var(--ok);border-color:#059669}
+    .btn-danger{background:var(--danger);border-color:#dc2626}
+    .btn-secondary{background:#374151;border-color:#4b5563}
+    .tool.active{outline:2px solid var(--accent);border-color:var(--accent)}
+    label{font-size:12px;color:var(--muted);display:block;margin:8px 0 6px}
+    .status{margin-top:8px;padding:8px 10px;border-radius:8px;font-size:12px;background:#111827;border:1px solid #374151;color:#d1d5db;min-height:34px;display:flex;align-items:center}
+    .status.ok{border-color:#065f46;color:#6ee7b7;background:#052e24}
+    .status.err{border-color:#7f1d1d;color:#fca5a5;background:#2b0b0b}
+    .canvas-wrap{background:#090b0f;border:1px dashed #374151;border-radius:12px;padding:12px;overflow:auto;max-height:78vh}
+    canvas{display:block;max-width:100%;height:auto;image-rendering:auto;border-radius:8px;cursor:crosshair}
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:12px;color:var(--muted);gap:8px;flex-wrap:wrap}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>CraftMaze - Siyah Blok / Turuncu Zemin</h1>
+
+    <div class="grid">
+      <aside class="card">
+        <h2>Kontroller</h2>
+
+        <label for="sizeSelect">Labirent Boyutu</label>
+        <select id="sizeSelect">
+          <option value="29x15">29 x 15</option>
+          <option value="45x23" selected>45 x 23</option>
+          <option value="61x31">61 x 31</option>
+          <option value="77x39">77 x 39</option>
+        </select>
+
+        <div class="row" style="margin-top:8px">
+          <button id="btnGenerate" class="btn-accent">🎲 Yeni Labirent</button>
+        </div>
+
+        <label>Çizim Aracı</label>
+        <div class="row">
+          <button id="toolAdd" class="tool active">🧱 Duvar Koy</button>
+          <button id="toolRemove" class="tool">⛏️ Blok Sil</button>
+        </div>
+
+        <label for="wallTheme">Blok (Duvar) Doku</label>
+        <select id="wallTheme">
+          <option value="customBlack" selected>Özel Siyah (IMG_3428)</option>
+          <option value="#1f2937">Düz Koyu Taş</option>
+          <option value="#7c3aed">Ametist</option>
+          <option value="#b45309">Bakır</option>
+        </select>
+
+        <label for="pathTheme">Zemin Doku</label>
+        <select id="pathTheme">
+          <option value="customOrange" selected>Özel Turuncu (IMG_3430)</option>
+          <option value="#fbbf24">Düz Kum</option>
+          <option value="#22c55e">Düz Çim</option>
+          <option value="#e5e7eb">Düz Kar</option>
+        </select>
+
+        <label for="thickness">Duvar Kalınlığı</label>
+        <select id="thickness">
+          <option value="half" selected>Yarı (%50)</option>
+          <option value="threeQuarters">Orta (%75)</option>
+          <option value="full">Tam (%100)</option>
+        </select>
+
+        <div class="row" style="margin-top:10px">
+          <button id="btnClear" class="btn-danger">🧹 Tümünü Temizle</button>
+          <button id="btnDownload" class="btn-ok">🖼️ PNG İndir</button>
+        </div>
+
+        <div id="status" class="status">Dokular yükleniyor...</div>
+      </aside>
+
+      <main class="card">
+        <div class="meta">
+          <div>Çözünürlük: <strong id="gridInfo">45 x 23</strong></div>
+        </div>
+        <div id="canvasWrap" class="canvas-wrap">
+          <canvas id="mazeCanvas" width="1440" height="736"></canvas>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const TILE_PATH = 0;
+      const TILE_WALL = 1;
+      const CELL = 32;
+
+      const canvas = document.getElementById("mazeCanvas");
+      const ctx = canvas.getContext("2d");
+
+      const sizeSelect = document.getElementById("sizeSelect");
+      const wallTheme = document.getElementById("wallTheme");
+      const pathTheme = document.getElementById("pathTheme");
+      const thickness = document.getElementById("thickness");
+      const gridInfo = document.getElementById("gridInfo");
+      const status = document.getElementById("status");
+
+      const toolAdd = document.getElementById("toolAdd");
+      const toolRemove = document.getElementById("toolRemove");
+      const btnGenerate = document.getElementById("btnGenerate");
+      const btnClear = document.getElementById("btnClear");
+      const btnDownload = document.getElementById("btnDownload");
+
+      let cols = 45, rows = 23;
+      let grid = [];
+      let tool = "add";
+      let mouseDown = false;
+
+      // --- Özel dokular (repo içindeki dosya adları) ---
+      const textures = {
+        floor: { img: new Image(), ready: false, name: "turuncu" },
+        wall: { img: new Image(), ready: false, name: "siyah" }
+      };
+
+      function setStatus(msg, type = "") {
+        status.textContent = msg;
+        status.className = "status" + (type ? " " + type : "");
+      }
+
+      function loadTextureWithFallback(imageObj, candidates, onOk, onFail) {
+        let i = 0;
+        function tryNext() {
+          if (i >= candidates.length) return onFail();
+          const src = candidates[i++];
+          imageObj.onload = onOk;
+          imageObj.onerror = tryNext;
+          imageObj.src = src;
+        }
+        tryNext();
+      }
+
+      function loadTextures() {
+        const floorCandidates = [
+          "IMG_3430 (1).jpeg",
+          "IMG_3430%20(1).jpeg",
+          "./IMG_3430 (1).jpeg",
+          "./IMG_3430%20(1).jpeg"
+        ];
+        const wallCandidates = [
+          "IMG_3428 (1).png",
+          "IMG_3428%20(1).png",
+          "./IMG_3428 (1).png",
+          "./IMG_3428%20(1).png"
+        ];
+
+        loadTextureWithFallback(
+          textures.floor.img,
+          floorCandidates,
+          () => { textures.floor.ready = true; render(); setStatus("✓ Turuncu zemin dokusu yüklendi.", "ok"); },
+          () => { textures.floor.ready = false; setStatus("⚠️ Turuncu doku bulunamadı (IMG_3430 (1).jpeg).", "err"); }
+        );
+
+        loadTextureWithFallback(
+          textures.wall.img,
+          wallCandidates,
+          () => { textures.wall.ready = true; render(); setStatus("✓ Siyah blok dokusu yüklendi.", "ok"); },
+          () => { textures.wall.ready = false; setStatus("⚠️ Siyah doku bulunamadı (IMG_3428 (1).png).", "err"); }
+        );
+      }
+
+      function parseSize(v) {
+        const [c, r] = v.split("x").map(Number);
+        return { c, r };
+      }
+
+      function resizeCanvas() {
+        canvas.width = cols * CELL;
+        canvas.height = rows * CELL;
+        gridInfo.textContent = `${cols} x ${rows}`;
+      }
+
+      function newGrid(fill = TILE_WALL) {
+        grid = Array.from({ length: rows }, () => Array(cols).fill(fill));
+      }
+
+      function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      function generateMaze() {
+        const s = parseSize(sizeSelect.value);
+        cols = s.c; rows = s.r;
+        resizeCanvas();
+        newGrid(TILE_WALL);
+
+        function carve(r, c) {
+          grid[r][c] = TILE_PATH;
+          const dirs = shuffle([[0,2],[0,-2],[2,0],[-2,0]]);
+          for (const [dr, dc] of dirs) {
+            const nr = r + dr, nc = c + dc;
+            if (nr > 0 && nr < rows - 1 && nc > 0 && nc < cols - 1 && grid[nr][nc] === TILE_WALL) {
+              grid[r + dr / 2][c + dc / 2] = TILE_PATH;
+              carve(nr, nc);
+            }
+          }
+        }
+
+        carve(1, 1);
+        grid[1][1] = TILE_PATH;
+        grid[rows - 2][cols - 2] = TILE_PATH;
+        render();
+      }
+
+      function clearAll() {
+        newGrid(TILE_PATH);
+        render();
+      }
+
+      function wallMargin(cellSize) {
+        if (thickness.value === "half") return Math.floor(cellSize / 4);
+        if (thickness.value === "threeQuarters") return Math.floor(cellSize / 8);
+        return 0;
+      }
+
+      function drawPathCell(targetCtx, x, y, s) {
+        const selected = pathTheme.value;
+        if (selected === "customOrange" && textures.floor.ready) {
+          targetCtx.drawImage(textures.floor.img, 0, 0, textures.floor.img.width, textures.floor.img.height, x, y, s, s);
+          return;
+        }
+        targetCtx.fillStyle = selected; // hex renk
+        targetCtx.fillRect(x, y, s, s);
+      }
+
+      function drawWallRect(targetCtx, x, y, w, h, s) {
+        const selected = wallTheme.value;
+        if (selected === "customBlack" && textures.wall.ready) {
+          targetCtx.drawImage(textures.wall.img, 0, 0, textures.wall.img.width, textures.wall.img.height, x, y, w, h);
+          return;
+        }
+        targetCtx.fillStyle = selected; // hex renk
+        targetCtx.fillRect(x, y, w, h);
+      }
+
+      function drawWallCell(targetCtx, r, c, x, y, s) {
+        const m = wallMargin(s);
+        if (m === 0) {
+          drawWallRect(targetCtx, x, y, s, s, s);
+          return;
+        }
+
+        const w = s - 2 * m;
+        drawWallRect(targetCtx, x + m, y + m, w, w, s);
+
+        const up = r > 0 && grid[r - 1][c] === TILE_WALL;
+        const down = r < rows - 1 && grid[r + 1][c] === TILE_WALL;
+        const left = c > 0 && grid[r][c - 1] === TILE_WALL;
+        const right = c < cols - 1 && grid[r][c + 1] === TILE_WALL;
+
+        if (up) drawWallRect(targetCtx, x + m, y, w, m, s);
+        if (down) drawWallRect(targetCtx, x + m, y + s - m, w, m, s);
+        if (left) drawWallRect(targetCtx, x, y + m, m, w, s);
+        if (right) drawWallRect(targetCtx, x + s - m, y + m, m, w, s);
+      }
+
+      function render() {
+        if (!grid.length) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            drawPathCell(ctx, c * CELL, r * CELL, CELL);
+          }
+        }
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (grid[r][c] === TILE_WALL) {
+              drawWallCell(ctx, r, c, c * CELL, r * CELL, CELL);
+            }
+          }
+        }
+
+        // Grid çizgileri
+        ctx.strokeStyle = "rgba(0,0,0,.45)";
+        ctx.lineWidth = 1;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            ctx.strokeRect(c * CELL + 0.5, r * CELL + 0.5, CELL - 1, CELL - 1);
+          }
+        }
+      }
+
+      function pointerToGrid(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = canvas.width / rect.width;
+        const sy = canvas.height / rect.height;
+        const x = (clientX - rect.left) * sx;
+        const y = (clientY - rect.top) * sy;
+        return { r: Math.floor(y / CELL), c: Math.floor(x / CELL) };
+      }
+
+      function paintAt(clientX, clientY) {
+        const { r, c } = pointerToGrid(clientX, clientY);
+        if (r < 0 || c < 0 || r >= rows || c >= cols) return;
+        const v = tool === "add" ? TILE_WALL : TILE_PATH;
+        if (grid[r][c] !== v) {
+          grid[r][c] = v;
+          render();
+        }
+      }
+
+      canvas.addEventListener("mousedown", (e) => { mouseDown = true; paintAt(e.clientX, e.clientY); });
+      canvas.addEventListener("mousemove", (e) => { if (mouseDown) paintAt(e.clientX, e.clientY); });
+      window.addEventListener("mouseup", () => { mouseDown = false; });
+
+      canvas.addEventListener("touchstart", (e) => {
+        mouseDown = true;
+        const t = e.touches[0];
+        paintAt(t.clientX, t.clientY);
+        e.preventDefault();
+      }, { passive: false });
+
+      canvas.addEventListener("touchmove", (e) => {
+        if (!mouseDown) return;
+        const t = e.touches[0];
+        paintAt(t.clientX, t.clientY);
+        e.preventDefault();
+      }, { passive: false });
+
+      canvas.addEventListener("touchend", () => { mouseDown = false; });
+
+      function setTool(next) {
+        tool = next;
+        toolAdd.classList.toggle("active", next === "add");
+        toolRemove.classList.toggle("active", next === "remove");
+      }
+
+      toolAdd.addEventListener("click", () => setTool("add"));
+      toolRemove.addEventListener("click", () => setTool("remove"));
+
+      btnGenerate.addEventListener("click", generateMaze);
+      btnClear.addEventListener("click", clearAll);
+      wallTheme.addEventListener("change", render);
+      pathTheme.addEventListener("change", render);
+      thickness.addEventListener("change", render);
+      sizeSelect.addEventListener("change", generateMaze);
+
+      function downloadPNG() {
+        const maxW = 3840;
+        const s = Math.min(80, Math.max(20, Math.floor(maxW / cols)));
+        const out = document.createElement("canvas");
+        out.width = cols * s;
+        out.height = rows * s;
+        const exp = out.getContext("2d");
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            drawPathCell(exp, c * s, r * s, s);
+          }
+        }
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (grid[r][c] === TILE_WALL) {
+              drawWallCell(exp, r, c, c * s, r * s, s);
+            }
+          }
+        }
+
+        exp.strokeStyle = "rgba(0,0,0,.45)";
+        exp.lineWidth = Math.max(1, Math.floor(s * 0.03));
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const lw = exp.lineWidth / 2;
+            exp.strokeRect(c * s + lw, r * s + lw, s - exp.lineWidth, s - exp.lineWidth);
+          }
+        }
+
+        out.toBlob((blob) => {
+          if (!blob) return setStatus("⚠️ PNG oluşturulamadı.", "err");
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `craftmaze-${cols}x${rows}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          setStatus("✓ PNG indirildi.", "ok");
+        }, "image/png");
+      }
+
+      btnDownload.addEventListener("click", downloadPNG);
+
+      // Init
+      resizeCanvas();
+      generateMaze();
+      loadTextures();
+    })();
+  </script>
+</body>
+</html>
