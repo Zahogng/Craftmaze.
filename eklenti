@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>CraftMaze Custom Texture Eklentisi</title>
+</head>
+<body>
+<script>
+/*
+  CraftMaze Tek Dosya Eklentisi
+  - Turuncu görsel = zemin
+  - Siyah görsel   = blok/duvar
+  - CDN'den otomatik yükler
+  - Yüklenemezse fallback: zemin=sand, duvar=darkBrick
+*/
+(function () {
+  const FLOOR_URL = "https://cdn.abacus.ai/images/efc7e7b0-1787-4a78-b948-ed273bc2c673.png"; // turuncu
+  const WALL_URL  = "https://cdn.abacus.ai/images/fd1db052-7b21-4384-a45c-390af4ddb124.png"; // siyah
+  const VERSION   = "20260911";
+
+  // CraftMaze içindeki global değişkenler/fonksiyonlar yoksa çık
+  if (
+    typeof window.updateTextures !== "function" ||
+    typeof window.render !== "function" ||
+    typeof window.customFloorImg === "undefined" ||
+    typeof window.customWallImg === "undefined"
+  ) {
+    console.warn("CraftMaze eklentisi: Gerekli değişkenler bulunamadı. Bu kodu CraftMaze ana scriptinden sonra ekleyin.");
+    return;
+  }
+
+  // Seçimleri otomatik ata
+  function applySelections() {
+    const wallSel = document.getElementById("wallTheme");
+    const pathSel = document.getElementById("pathTheme");
+
+    if (wallSel) wallSel.value = "customBlack";    // siyah blok
+    if (pathSel) pathSel.value = "customOrange";   // turuncu zemin
+  }
+
+  // Güvenli yeniden çizim
+  function redraw() {
+    applySelections();
+    window.updateTextures();
+    window.render();
+  }
+
+  // CORS (PNG export vb. için)
+  window.customFloorImg.crossOrigin = "anonymous";
+  window.customWallImg.crossOrigin  = "anonymous";
+
+  // Başlangıç flag'leri
+  window.customFloorReady = false;
+  window.customWallReady  = false;
+
+  // Yükleme başarılı
+  window.customFloorImg.onload = function () {
+    window.customFloorReady = true;
+    redraw();
+  };
+
+  window.customWallImg.onload = function () {
+    window.customWallReady = true;
+    redraw();
+  };
+
+  // Hata fallback
+  window.customFloorImg.onerror = function () {
+    window.customFloorReady = false;
+    const pathSel = document.getElementById("pathTheme");
+    if (pathSel) pathSel.value = "sand";
+    window.updateTextures();
+    window.render();
+    console.warn("Turuncu zemin yüklenemedi -> sand fallback uygulandı.");
+  };
+
+  window.customWallImg.onerror = function () {
+    window.customWallReady = false;
+    const wallSel = document.getElementById("wallTheme");
+    if (wallSel) wallSel.value = "darkBrick";
+    window.updateTextures();
+    window.render();
+    console.warn("Siyah blok yüklenemedi -> darkBrick fallback uygulandı.");
+  };
+
+  // Yüklemeyi başlat (cache busting)
+  window.customFloorImg.src = FLOOR_URL + "?v=" + VERSION;
+  window.customWallImg.src  = WALL_URL + "?v=" + VERSION;
+
+  // İlk anda da seçimleri uygula
+  redraw();
+
+  // updateTextures patch:
+  // Eğer senin ana dosyandaki updateTextures içinde bu bloklar yoksa,
+  // custom hazır değilken fallback çizmesi için fonksiyonu sarıyoruz.
+  const originalUpdateTextures = window.updateTextures;
+  window.updateTextures = function patchedUpdateTextures() {
+    originalUpdateTextures();
+
+    // Eğer ana dosya custom hazır değilken boş bırakıyorsa,
+    // tema seçicileri fallbacke çekip tekrar çizdir:
+    const wallSel = document.getElementById("wallTheme");
+    const pathSel = document.getElementById("pathTheme");
+
+    let changed = false;
+
+    if (wallSel && wallSel.value === "customBlack" && !window.customWallReady) {
+      wallSel.value = "darkBrick";
+      changed = true;
+    }
+
+    if (pathSel && pathSel.value === "customOrange" && !window.customFloorReady) {
+      pathSel.value = "sand";
+      changed = true;
+    }
+
+    if (changed) originalUpdateTextures();
+  };
+})();
+</script>
+</body>
+</html>
