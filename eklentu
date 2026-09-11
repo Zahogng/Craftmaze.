@@ -1,0 +1,70 @@
+/* === CraftMaze Özel Doku Eklentisi (Turuncu Zemin + Siyah Blok) === */
+(() => {
+  // Sen dosya eklemeyeceksin: görseller buradan yüklenecek
+  const FLOOR_URL = "https://cdn.abacus.ai/images/efc7e7b0-1787-4a78-b948-ed273bc2c673.png"; // turuncu
+  const WALL_URL  = "https://cdn.abacus.ai/images/fd1db052-7b21-4384-a45c-390af4ddb124.png"; // siyah
+
+  // Mevcut dosyadaki global değişkenler yoksa sessiz çık
+  if (
+    typeof customFloorImg === "undefined" ||
+    typeof customWallImg === "undefined" ||
+    typeof updateTextures !== "function" ||
+    typeof render !== "function"
+  ) {
+    console.warn("Eklenti: Gerekli değişkenler bulunamadı.");
+    return;
+  }
+
+  function applyCustomSelections() {
+    const wallSel = document.getElementById("wallTheme");
+    const pathSel = document.getElementById("pathTheme");
+
+    if (wallSel) wallSel.value = "customBlack";   // siyah = blok/duvar
+    if (pathSel) pathSel.value = "customOrange";  // turuncu = zemin
+
+    updateTextures();
+    render();
+  }
+
+  // CORS güvenliği (PNG export için önemli)
+  customFloorImg.crossOrigin = "anonymous";
+  customWallImg.crossOrigin = "anonymous";
+
+  // Yüklenince aktif et
+  customFloorImg.onload = () => {
+    customFloorReady = true;
+    applyCustomSelections();
+  };
+
+  customWallImg.onload = () => {
+    customWallReady = true;
+    applyCustomSelections();
+  };
+
+  // Hata olursa fallback tema ver (boş görünmesin)
+  customFloorImg.onerror = () => {
+    customFloorReady = false;
+    const pathSel = document.getElementById("pathTheme");
+    if (pathSel) pathSel.value = "sand";
+    updateTextures();
+    render();
+    console.warn("Turuncu zemin görseli yüklenemedi, 'sand' fallback uygulandı.");
+  };
+
+  customWallImg.onerror = () => {
+    customWallReady = false;
+    const wallSel = document.getElementById("wallTheme");
+    if (wallSel) wallSel.value = "darkBrick";
+    updateTextures();
+    render();
+    console.warn("Siyah blok görseli yüklenemedi, 'darkBrick' fallback uygulandı.");
+  };
+
+  // Cache kırıcı
+  const v = "20260911";
+  customFloorImg.src = `${FLOOR_URL}?v=${v}`;
+  customWallImg.src = `${WALL_URL}?v=${v}`;
+
+  // İlk anda da seçimleri zorla uygula
+  applyCustomSelections();
+})();
